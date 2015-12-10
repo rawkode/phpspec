@@ -40,11 +40,15 @@ use PhpSpec\Process\Shutdown\Shutdown;
 
 class ContainerAssembler
 {
+    /** @var Composer\Autoload\ClassLoader */
+    private $autoloader;
+
     /**
      * @param ServiceContainer $container
      */
     public function build(ServiceContainer $container)
     {
+        $this->establishAutoloader();
         $this->setupIO($container);
         $this->setupEventDispatcher($container);
         $this->setupConsoleEventDispatcher($container);
@@ -358,6 +362,17 @@ class ContainerAssembler
                 if (!is_dir($config['spec_path'])) {
                     mkdir($config['spec_path'], 0777, true);
                 }
+
+                if (is_null($config['psr4_prefix'])) {
+                    $config['psr4_prefix'] = $this->psr4PrefixForSourceDirectory($config['src_path']);
+                }
+
+                if (empty($config['namespace'])) {
+                    $config['namespace'] = $this->psr4PrefixForSourceDirectory($config['src_path']);
+                }
+
+                var_dump($config);
+                die;
 
                 $c->set(
                     sprintf('locator.locators.%s_suite', $name),
@@ -704,6 +719,35 @@ class ContainerAssembler
     {
         $container->setShared('process.shutdown', function() {
             return new Shutdown();
+        });
+    }
+
+    /**
+     * Returns the PSR4 prefix for classes within a source directory
+     *
+     * @param  string $sourceDirectory
+     * @return string
+     */
+    private function psr4PrefixForSourceDirectory($sourceDirectory)
+    {
+        foreach ($this->autoloader->getPrefixesPsr4() as $class => $directory) {
+            $relativeDirectory = str_replace(getcwd() . '/', '', $directory);
+
+            if ($relativeDirectory[0] === $sourceDirectory) {
+                return rtrim($class, '\\');
+            }
+        }
+    }
+
+    /**
+     * @return Composer\Autoload\ClassLoader
+     */
+    private function establishAutoloader()
+    {
+        $this->autoloader = array_reduce(spl_autoload_functions(), function ($autoloader, $arrayElement) {
+            if (get_class($arrayElement[0]) === 'Composer\Autoload\ClassLoader') {
+                return $arrayElement[0];
+            }
         });
     }
 }
